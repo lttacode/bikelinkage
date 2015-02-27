@@ -48,7 +48,6 @@ function cntr(point, factor, origin) {
   return pt(origin.x + point.x * factor, origin.y - point.y * factor);
 };
 
-
 // Bike object.
 
 var Bike = function(ctx, w, h, o_x, o_y, scale, geo, img_url, links, shock) {
@@ -60,10 +59,7 @@ var Bike = function(ctx, w, h, o_x, o_y, scale, geo, img_url, links, shock) {
 
   this.bg_image = new Image();
   var self = this;
-  this.bg_image.onload = function() {
-    self.draw(ctx, w, h);
-  }
-  this.bg_image.src = img_url;
+
   this.img_url = img_url;
   this.origin = pt(o_x, o_y);
   this.scale = scale;
@@ -74,6 +70,19 @@ var Bike = function(ctx, w, h, o_x, o_y, scale, geo, img_url, links, shock) {
   this.points = [];
   this.points.push.apply(this.points, links);
   this.points.push.apply(this.points, shock);
+
+  // Load background image.
+  var n = 1;
+  var loadInterval = setInterval(function() {
+    drawLoading(ctx, w, h, n, 4);
+    n += 1;
+  }, 500);
+
+  this.bg_image.onload = function() {
+    clearInterval(loadInterval);
+    self.draw(ctx, w, h);
+  }
+  this.bg_image.src = img_url;
 };
 
 Bike.prototype.redraw = function() {
@@ -223,4 +232,22 @@ String.prototype.format = function() {
         s = s.replace(new RegExp('\\{' + i + '\\}', 'gm'), arguments[i]);
     }
     return s;
+};
+
+function drawLoading(ctx, w, h, n, m) {
+  var repeated = function(s, n) {
+    return new Array(n + 1).join(s);
+  }
+  ctx.fillStyle = "#333";
+  ctx.font = '20px san-serif';
+  var text = "Loading" + repeated('.', n % m) + repeated(' ', m - n % m),
+      textDim = ctx.measureText(text),
+      textHeight = 20;
+
+  var x1 = (w / 2) - (textDim.width / 2),
+      x2 = x1 + textDim.width,
+      y1 = (h / 2) - (textHeight / 2),
+      y2 = y1 + textHeight;
+  ctx.clearRect(x1, y1 - textHeight, x2 - x1, y2 - y1 + textHeight);
+  ctx.fillText(text, x1, y1);
 };
