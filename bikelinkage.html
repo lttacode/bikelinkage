@@ -7,59 +7,59 @@
     <script src="drag.js"></script>
     <script src="constraints.js"></script>
     <script src="bikecalc.js"></script>
+    <script src="linkage_controller.js"></script>
+    <script src="constraints_controller.js"></script>
     <script>
-      function init() {
-        var canvas2d = document.getElementById("cvs");
+      function makeCanvas(id) {
+        var canvas2d = document.getElementById(id);
         var context = canvas2d.getContext("2d");
         var w = canvas2d.width;
         var h = canvas2d.height;
 
         var canvas = new ScaledCanvas(
-          context, w, h,
+          canvas2d, context, canvas2d.width, canvas2d.height,
           1500, // view port physical width: 1500mm.
           pt(w / 2, h / 2) // origin in the middle of the image.
           );
 
+        return canvas;
+      };
+
+      function init() {
+        var canvas = makeCanvas('canvasBike');
         var bike = new Enduro29_M(canvas);
+        //var bike = new Orange322_17(canvas);
 
-        var dragging = function(dragged_index, start, end) {
-          var links = bike.links, len = links.length, point = null;
-          start = canvas.screenToPhysCoordinates(start[0], start[1]);
-          end = canvas.screenToPhysCoordinates(end[0], end[1]);
-          bike.drawDebugPt(start);
-          bike.drawDebugPt(end);
-
-          bike.movePoint(dragged_index, end.x, end.y);
-          bike.draw();
-          bike.drawDebugPt(bike.points[dragged_index]);
-        };
-
-        var canDrag = function(start) {
-          var links = bike.links, len = links.length, point = null;
-          start = canvas.screenToPhysCoordinates(start[0], start[1]);
-          bike.drawDebugPt(start);
-
-          var link_index = bike.findClosestPoint(start, 15);
-          if (link_index != null) {
-            bike.drawDebugPt(bike.points[link_index]);
-          }
-          return link_index;
-        };
-
-        var dragEnd = function(index, start, end) {
-          bike.printData();
-          console.log("%d, %d", start.x, start.y);
-        };
-
-        //var solver = new IterativeConstraintSolver(
-        //    context, );
+        var solverCanvas = makeCanvas('canvasLinkage');
+        var solver = new IterativeConstraintSolver(
+            solverCanvas, bike.buildConstraints(), 5 /* epsilon */);
+        solver.drawConstraints();
 
         var draghandler = new DragController();
-        draghandler.register(canvas2d, canDrag, dragging, dragEnd);
+
+        var controller = new ConstraintsController(
+            solverCanvas, bike, solver, draghandler);
       }
     </script>
+
+    <style>
+    #canvasBike, #canvasLinkage {
+        background:transparent;
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: 0;
+    }
+    #canvasLinkage {
+      z-index: 1;
+    }
+    </style>
   </head>
   <body onLoad="javascript:init()">
-    <canvas id="cvs" width="600" height="600" />
+    <div style="position: relative;">
+      <canvas id="canvasBike" width="600" height="600"></canvas>
+      <canvas id="canvasLinkage" width="600" height="600"></canvas>
+    </div>
   </body>
 </html>

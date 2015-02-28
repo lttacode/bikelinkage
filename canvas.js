@@ -1,7 +1,8 @@
 var ScaledCanvas = function(
-    context, w, h,
+    canvas2d, context, w, h,
     physical_viewport_w,
     origin) {
+  this.canvas2d = canvas2d;
   this.ctx = context;
   this.w = w;
   this.h = h;
@@ -82,6 +83,7 @@ ScaledCanvas.prototype.drawLoading = function(n, m) {
   var repeated = function(s, n) {
     return new Array(n + 1).join(s);
   }
+
   var ctx = this.ctx, w = this.w, h = this.h;
 
   ctx.fillStyle = "#333";
@@ -103,4 +105,8 @@ ScaledCanvas.prototype.screenToPhysCoordinates = function(x, y) {
   y = -(y - this.origin.y) / this.scale;
 
   return pt(x, y);
+};
+
+ScaledCanvas.prototype.clear = function() {
+  this.ctx.clearRect(0, 0, this.w, this.h);
 };

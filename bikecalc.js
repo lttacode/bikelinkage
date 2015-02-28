@@ -1,4 +1,5 @@
 var wheel_29 = 366.5; // WTB Exiwolf 29x2.3 based on circumference 2302mm.
+var wheel_26x240 = 340.5; // 26x2.40 tire.
 
 var Geometry = function(
     reach, stack, bb_height, cs_length, st_len, st_angle, ht_angle, ht_len,
@@ -165,7 +166,6 @@ Bike.prototype.buildConstraints = function() {
 
   // Need at least two points to define a swinging link.
   if (this.links.length > 1) {
-    var prev = null;
     // Attach first link to main frame with rotating joint.
     var elem = new BarElement(this.links[0], this.links[1]);
     var joint = new FixedRotatorJoint(this.links[0], elem, 0);
@@ -173,20 +173,24 @@ Bike.prototype.buildConstraints = function() {
     constraints.push(joint);
 
     // Attach all intermediate joints.
-    for (var i = 1; i < this.links.length - 1; ++i) {
+    for (var i = 1; i < this.links.length - 2; ++i) {
       var nextElem = new BarElement(this.links[i], this.links[i + 1]);
       joint = new RotatorJoint(elem, nextElem);
       constraints.push(nextElem);
       constraints.push(joint);
+      elem = nextElem;
     }
 
     // Attach remaining final link, if it exists.
     if (this.links.length > 2) {
       var i = this.links.length - 2;
-      elem = new BarElement(this.links[i], this.links[i + 1]);
-      joint = new FixedRotatorJoint(this.links[i + 1], elem, 1);
-      constraints.push(elem);
-      constraints.push(joint);
+      nextElem = new BarElement(this.links[i], this.links[i + 1]);
+      // Join the previous element with last element as rotating joint.
+      constraints.push(new RotatorJoint(elem, nextElem));
+      // Affix last element as fixed joint.
+      constraints.push(new FixedRotatorJoint(this.links[i + 1], nextElem, 1));
+      // Push last bar element as well.
+      constraints.push(nextElem);
     }
   }
 
@@ -206,7 +210,7 @@ Bike.prototype.printData = function() {
       "// Rear triangle links:\n" +
       "%s,\n" +
       "// Rear shock:\n" +
-      "%s, %d,\n"
+      "%s, %d\n"
     ),
     g.reach, g.stack, g.bb_height, g.cs_length, g.st_len, g.st_angle,
         g.ht_angle, g.ht_len, g.wheel_radius,
@@ -235,10 +239,32 @@ var Enduro29_M = function(ctx) {
       // Rear triangle links:
       [pt(13, 35), pt(-390, -2), pt(-70, 220), pt(13, 210)],
       // Rear shock:
-      [pt(-42, 230), pt(198, 378)], 57,
+      [pt(-42, 230), pt(198, 378)], 57
 
       );
 };
+
+var Orange322_17 = function(ctx) {
+  var bb_height = wheel_26x240 + 12.0;
+  return new Bike(
+      ctx,
+
+      // Geometry:
+      new Geometry(400, 590, bb_height, 460, 431.8, 74, 63, 120, wheel_26x240),
+      // Background image:
+      'http://p.vitalmtb.com/photos/users/29582/setup_checks/25474/photos/23134/s780_IMG_1314.jpg?1397595647',
+      pt(326, 356), 1.2,
+
+      //"resources/enduro29.jpg",
+      //pt(303, 293), 1.015,
+
+      // Rear triangle links:
+      [pt(28, 55), pt(-457, -10)],
+      // Rear shock:
+      [pt(-17, 228), pt(220, 255)], 57
+
+      );
+}
 
 // Utilities.
 
