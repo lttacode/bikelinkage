@@ -229,12 +229,15 @@ var Enduro29_M = function(ctx) {
       // Geometry:
       new Geometry(425, 632, 335, 425, 445, 75, 67.5, 120, wheel_29),
       // Background image:
-      //'http://s7d5.scene7.com/is/image/Specialized/121781?$Hero$',
       'http://brimages.bikeboardmedia.netdna-cdn.com/wp-content/uploads/2013/02/S-Works-Enduro-29r.jpg',
       pt(515, 451), 0.71,
 
+      //'http://s7d5.scene7.com/is/image/Specialized/121781?$Hero$',
       //"resources/enduro29.jpg",
       //pt(303, 293), 1.015,
+
+      //'http://stwww.bikemag.com/files/2013/02/broadsideG.jpg',
+      // origin, scale tbd
 
       // Rear triangle links:
       [pt(13, 35), pt(-390, -2), pt(-70, 220), pt(13, 210)],

@@ -1,7 +1,3 @@
-var Spring = function() {
-
-};
-
 
 var RotatorJoint = function(elem1, elem2) {
   this.elem1 = elem1;
@@ -84,9 +80,13 @@ var BarElement = function(pt1, pt2) {
 };
 
 BarElement.prototype.relax = function() {
+  return this.lengthenTo(this.length);
+}
+
+BarElement.prototype.lengthenTo = function(toLength) {
   var l = pt_diff(this.pt1, this.pt2),
       sl = Math.sqrt(l),
-      dl = (this.length - sl) / 2,
+      dl = (toLength - sl) / 2,
       dx = (this.pt1.x - this.pt2.x) / sl,
       dy = (this.pt1.y - this.pt2.y) / sl;
 
@@ -146,6 +146,27 @@ BarElement.prototype.distance = function(from) {
           Number.MAX_VALUE : pt_diff(from, this.pt2);
 
   return Math.min(d1, d2);
+};
+
+
+var Spring = function(pt1, pt2, stroke) {
+  this.stroke = stroke;
+  this.parent.constructor.call(this, pt1, pt2);
+
+  this.maxLength = this.length;
+  this.minLength = this.length - stroke;
+};
+Spring.prototype = Object.create(BarElement.prototype);
+Spring.prototype.parent = BarElement;
+
+Spring.prototype.relax = function() {
+  var l = pt_diff(this.pt1, this.pt2);
+
+  if (l < this.minLength * this.minLength) {
+    this.lengthenTo(this.minLength);
+  } else if (l > this.maxLength * maxLength) {
+    this.lengthenTo(this.maxLength);
+  }
 };
 
 

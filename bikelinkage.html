@@ -32,7 +32,7 @@
 
         var solverCanvas = makeCanvas('canvasLinkage');
         var solver = new IterativeConstraintSolver(
-            solverCanvas, bike.buildConstraints(), 5 /* epsilon */);
+            solverCanvas, bike.buildConstraints(), 10 /* epsilon */);
         solver.drawConstraints();
 
         var draghandler = new DragController();
