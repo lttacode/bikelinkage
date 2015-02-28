@@ -45,7 +45,7 @@ var Bike = function(
     geo,
     img_url, img_origin, img_scale,
     links,
-    shock, stroke) {
+    shock, stroke, shock_attach_link) {
   this.geo = geo;
 
   this.canvas = canvas;
@@ -60,6 +60,7 @@ var Bike = function(
   this.links = links;
   this.shock = shock;
   this.shock_stroke = stroke;
+  this.shock_link = shock_attach_link;
 
   this.points = [];
   this.points.push.apply(this.points, links);
@@ -164,6 +165,8 @@ Bike.prototype.findClosestPoint = function(pt, max_dist) {
 Bike.prototype.buildConstraints = function() {
   var constraints = [];
 
+  var linkBarElements = [];
+
   // Need at least two points to define a swinging link.
   if (this.links.length > 1) {
     // Attach first link to main frame with rotating joint.
@@ -171,6 +174,7 @@ Bike.prototype.buildConstraints = function() {
     var joint = new FixedRotatorJoint(this.links[0], elem, 0);
     constraints.push(elem);
     constraints.push(joint);
+    linkBarElements.push(elem);
 
     // Attach all intermediate joints.
     for (var i = 1; i < this.links.length - 2; ++i) {
@@ -178,6 +182,7 @@ Bike.prototype.buildConstraints = function() {
       joint = new RotatorJoint(elem, nextElem);
       constraints.push(nextElem);
       constraints.push(joint);
+      linkBarElements.push(nextElem);
       elem = nextElem;
     }
 
@@ -191,8 +196,19 @@ Bike.prototype.buildConstraints = function() {
       constraints.push(new FixedRotatorJoint(this.links[i + 1], nextElem, 1));
       // Push last bar element as well.
       constraints.push(nextElem);
+      linkBarElements.push(nextElem);
     }
   }
+
+  // Build shock constraints.
+  var shock = new Spring(this.shock[0], this.shock[1], this.shock_stroke);
+  var shockFixedEnd = new FixedRotatorJoint(this.shock[1], shock, 1);
+  var shockRelativeLink = new RelativeFixedRotatorJoint(
+    this.shock[0], linkBarElements[this.shock_link], shock, 0);
+
+  constraints.push(shock);
+  constraints.push(shockFixedEnd);
+  constraints.push(shockRelativeLink);
 
   return constraints;
 };
@@ -242,7 +258,7 @@ var Enduro29_M = function(ctx) {
       // Rear triangle links:
       [pt(13, 35), pt(-390, -2), pt(-70, 220), pt(13, 210)],
       // Rear shock:
-      [pt(-42, 230), pt(198, 378)], 57
+      [pt(-42, 230), pt(198, 378)], 57, 2
 
       );
 };
@@ -264,7 +280,7 @@ var Orange322_17 = function(ctx) {
       // Rear triangle links:
       [pt(28, 55), pt(-457, -10)],
       // Rear shock:
-      [pt(-17, 228), pt(220, 255)], 57
+      [pt(-17, 228), pt(220, 255)], 57, 0
 
       );
 }
