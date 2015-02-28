@@ -1,6 +1,8 @@
+var wheel_29 = 366.5; // WTB Exiwolf 29x2.3 based on circumference 2302mm.
 
 var Geometry = function(
-    reach, stack, bb_height, cs_length, st_len, st_angle, ht_angle, ht_len) {
+    reach, stack, bb_height, cs_length, st_len, st_angle, ht_angle, ht_len,
+    wheel_radius) {
   this.stack = stack;
   this.reach = reach;
   this.bb_height = bb_height;
@@ -9,6 +11,7 @@ var Geometry = function(
   this.ht_angle = ht_angle;
   this.st_len = st_len;
   this.ht_len = ht_len;
+  this.wheel_radius = wheel_radius;
 };
 
 var Point = function(x, y) {
@@ -24,16 +27,6 @@ function pt(x, y) {
   return new Point(x, y)
 };
 
-function line(context, from, to) {
-  context.beginPath();
-  context.moveTo(from.x, from.y);
-  context.lineTo(to.x, to.y);
-  context.stroke();
-
-  context.strokeRect(to.x - 2, to.y - 2, 4, 4);
-  context.strokeRect(from.x - 2, from.y - 2, 4, 4);
-};
-
 function move_pt_a(from, dist, angle) {
   var x = from.x;
   var y = from.y;
@@ -44,28 +37,28 @@ function move_pt_a(from, dist, angle) {
   return pt(x, y);
 };
 
-function cntr(point, factor, origin) {
-  return pt(origin.x + point.x * factor, origin.y - point.y * factor);
-};
-
 // Bike object.
 
-var Bike = function(ctx, w, h, o_x, o_y, scale, geo, img_url, links, shock) {
+var Bike = function(
+    canvas,
+    geo,
+    img_url, img_origin, img_scale,
+    links,
+    shock, stroke) {
   this.geo = geo;
 
-  this.ctx = ctx;
-  this.w = w;
-  this.h = h;
+  this.canvas = canvas;
 
   this.bg_image = new Image();
   var self = this;
 
   this.img_url = img_url;
-  this.origin = pt(o_x, o_y);
-  this.scale = scale;
+  this.img_origin = img_origin;
+  this.img_scale = img_scale;
 
   this.links = links;
   this.shock = shock;
+  this.shock_stroke = stroke;
 
   this.points = [];
   this.points.push.apply(this.points, links);
@@ -74,54 +67,43 @@ var Bike = function(ctx, w, h, o_x, o_y, scale, geo, img_url, links, shock) {
   // Load background image.
   var n = 1;
   var loadInterval = setInterval(function() {
-    drawLoading(ctx, w, h, n, 4);
+    canvas.drawLoading(n, 4);
     n += 1;
   }, 500);
 
   this.bg_image.onload = function() {
     clearInterval(loadInterval);
-    self.draw(ctx, w, h);
+    self.draw();
   }
   this.bg_image.src = img_url;
 };
 
-Bike.prototype.redraw = function() {
-  this.draw(this.ctx, this.w, this.h);
-};
-
-Bike.prototype.drawShock = function(ctx, w, h, shock) {
-  var from = cntr(shock[0], this.scale, this.origin);
-  var to = cntr(shock[1], this.scale, this.origin);
-
-  ctx.strokeColor = "#00FF00";
-  line(ctx, from, to);
+Bike.prototype.drawShock = function() {
+  this.canvas.strokeStyle("#00FF00");
+  this.canvas.lineWithMarkers(this.shock[0], this.shock[1]);
 }
 
-Bike.prototype.drawLinkage = function(ctx, w, h, links) {
+Bike.prototype.drawLinkage = function() {
   var prev = null;
-  var marked_width = 6;
-  var marked_offset = marked_width / 2;
+  this.canvas.strokeStyle("#FFFF00");
 
-  ctx.strokeStyle = "#FFFF00";
-  var len = links.length;
+  var len = this.links.length;
   for (var nlink = 0; nlink < len; nlink++) {
-    var link = cntr(links[nlink], this.scale, this.origin);
-    ctx.strokeRect(link.x - marked_offset, link.y - marked_offset,
-        marked_width, marked_width);
+    var link = this.links[nlink];
+    this.canvas.drawMarker(link);
     if (prev) {
-      line(ctx, prev, link);
+      this.canvas.line(prev, link);
     }
     prev = link;
   }
 };
 
-Bike.prototype.draw = function(ctx, w, h) {
-  ctx.drawImage(this.bg_image, 0, 0);
+Bike.prototype.draw = function() {
+  var ctx = this.canvas;
+  ctx.drawBackground(this.bg_image, this.img_scale, this.img_origin);
 
-  ctx.strokeStyle = "#000000";
-  ctx.strokeRect(0, 0, w, h);
-
-  ctx.strokeStyle = "#0000FF";
+  ctx.strokeStyle("#000000");
+  ctx.strokeRect(0, 0, this.canvas.w, this.canvas.h);
 
   var geo = this.geo;
   var bb_pos = pt(0, 0);
@@ -130,45 +112,38 @@ Bike.prototype.draw = function(ctx, w, h) {
   var st_upper = move_pt_a(bb_pos, geo.st_len, geo.st_angle - 90.);
   var st_mid = move_pt_a(bb_pos, geo.st_len * 0.7, geo.st_angle - 90.);
 
-  var rear_axle = move_pt_a(bb_pos, geo.cs_length, -90);
+  // Calculate the locatio of the rear triangle by finding ground via bb
+  // height, then the the y position of the rear wheel via wheel radius, and
+  // triangulating with chainstay length. Simplified via
+  // cos(arccos(x)) == sqrt(1 - x^2)
+  // d = (wheel_radius - bb_height) / cs_length.
+  // rear_x = cos(arcsin(d)) * cs_length = sqrt(1 - d^2) * cs_length.
+  var d = (geo.wheel_radius - geo.bb_height) / geo.cs_length,
+      rear_y = bb_pos.y - geo.bb_height + geo.wheel_radius,
+      rear_x = bb_pos.x - Math.sqrt(1 - d * d) * geo.cs_length;
+  var rear_axle = pt(rear_x, rear_y);
 
-  var origin = this.origin;
-  var scale = this.scale;
-  bb_pos = cntr(bb_pos, scale, origin);
-  ht_upper = cntr(ht_upper, scale, origin);
-  ht_lower = cntr(ht_lower, scale, origin);
-  st_upper = cntr(st_upper, scale, origin);
-  st_mid = cntr(st_mid, scale, origin);
-  rear_axle = cntr(rear_axle, scale, origin);
+  ctx.strokeStyle("#0000FF");
+  ctx.lineWithMarkers(bb_pos, ht_lower);
+  ctx.lineWithMarkers(bb_pos, st_upper);
+  ctx.lineWithMarkers(ht_upper, ht_lower);
+  ctx.lineWithMarkers(st_mid, ht_upper);
+  ctx.lineWithMarkers(bb_pos, rear_axle);
 
-  line(ctx, bb_pos, ht_lower);
-  line(ctx, bb_pos, st_upper);
-  line(ctx, ht_upper, ht_lower);
-  line(ctx, st_mid, ht_upper);
-  line(ctx, bb_pos, rear_axle);
+  ctx.circle(rear_axle, geo.wheel_radius);
 
-  this.drawLinkage(ctx, w, h, this.links);
-  this.drawShock(ctx, w, h, this.shock);
+  this.drawLinkage();
+  this.drawShock();
 };
 
 Bike.prototype.movePoint = function(i, newX, newY) {
   this.points[i].x = newX;
   this.points[i].y = newY;
-  this.draw(this.ctx, this.w, this.h);
-};
-
-Bike.prototype.screenToPhysCoordinates = function(x, y) {
-  x = (x - this.origin.x) / this.scale;
-  y = -(y - this.origin.y) / this.scale;
-
-  return pt(x, y);
 };
 
 Bike.prototype.drawDebugPt = function(pt) {
-  pt = cntr(pt, this.scale, this.origin);
-
-  this.ctx.fillStyle = "#FF5500";
-  this.ctx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
+  this.canvas.fillStyle("#FF5500");
+  this.canvas.drawMarker(pt);
 };
 
 Bike.prototype.findClosestPoint = function(pt, max_dist) {
@@ -185,42 +160,84 @@ Bike.prototype.findClosestPoint = function(pt, max_dist) {
   return closestPt(this.points);
 };
 
+Bike.prototype.buildConstraints = function() {
+  var constraints = [];
+
+  // Need at least two points to define a swinging link.
+  if (this.links.length > 1) {
+    var prev = null;
+    // Attach first link to main frame with rotating joint.
+    var elem = new BarElement(this.links[0], this.links[1]);
+    var joint = new FixedRotatorJoint(this.links[0], elem, 0);
+    constraints.push(elem);
+    constraints.push(joint);
+
+    // Attach all intermediate joints.
+    for (var i = 1; i < this.links.length - 1; ++i) {
+      var nextElem = new BarElement(this.links[i], this.links[i + 1]);
+      joint = new RotatorJoint(elem, nextElem);
+      constraints.push(nextElem);
+      constraints.push(joint);
+    }
+
+    // Attach remaining final link, if it exists.
+    if (this.links.length > 2) {
+      var i = this.links.length - 2;
+      elem = new BarElement(this.links[i], this.links[i + 1]);
+      joint = new FixedRotatorJoint(this.links[i + 1], elem, 1);
+      constraints.push(elem);
+      constraints.push(joint);
+    }
+  }
+
+  return constraints;
+};
+
 Bike.prototype.printData = function() {
   var s = this;
   var g = this.geo;
   console.log(
     (
       "// Geometry:\n" +
-      "new Geometry(%i, %i, %i, %i, %i, %f, %f, %i),\n" +
+      "new Geometry(%i, %i, %i, %i, %i, %f, %f, %i, %f),\n" +
       "// Background image:\n" +
       "'%s',\n" +
+      "pt(%d, %d), %f,\n" +
       "// Rear triangle links:\n" +
       "%s,\n" +
       "// Rear shock:\n" +
-      "%s,\n"
+      "%s, %d,\n"
     ),
     g.reach, g.stack, g.bb_height, g.cs_length, g.st_len, g.st_angle,
-        g.ht_angle, g.ht_len,
-    s.img_url,
+        g.ht_angle, g.ht_len, g.wheel_radius,
+    s.img_url, s.img_origin.x, s.img_origin.y, s.img_scale,
     "[" + s.links.join(", ") + "]",
-    "[" + s.shock.join(", ") + "]"
+    "[" + s.shock.join(", ") + "]", this.shock_stroke
   );
 };
 
 // Constructors.
 
-var Enduro29_M = function(ctx, w, h) {
+var Enduro29_M = function(ctx) {
   return new Bike(
-      ctx, w, h, w * 0.5065, h * 0.4865, 0.39,
+      ctx,
+
       // Geometry:
-      new Geometry(425, 632, 351, 430, 445, 75, 67.5, 120),
+      new Geometry(425, 632, 335, 425, 445, 75, 67.5, 120, wheel_29),
       // Background image:
-      "http://s7d5.scene7.com/is/image/Specialized/121781?$Hero$",
+      //'http://s7d5.scene7.com/is/image/Specialized/121781?$Hero$',
+      'http://brimages.bikeboardmedia.netdna-cdn.com/wp-content/uploads/2013/02/S-Works-Enduro-29r.jpg',
+      pt(515, 451), 0.71,
+
       //"resources/enduro29.jpg",
+      //pt(303, 293), 1.015,
+
       // Rear triangle links:
-      [pt(15, 35), pt(-420, 30), pt(-68, 215), pt(15, 205)],
+      [pt(13, 35), pt(-390, -2), pt(-70, 220), pt(13, 210)],
       // Rear shock:
-      [pt(-41, 223), pt(200, 374)] );
+      [pt(-42, 230), pt(198, 378)], 57,
+
+      );
 };
 
 // Utilities.
@@ -232,22 +249,4 @@ String.prototype.format = function() {
         s = s.replace(new RegExp('\\{' + i + '\\}', 'gm'), arguments[i]);
     }
     return s;
-};
-
-function drawLoading(ctx, w, h, n, m) {
-  var repeated = function(s, n) {
-    return new Array(n + 1).join(s);
-  }
-  ctx.fillStyle = "#333";
-  ctx.font = '20px san-serif';
-  var text = "Loading" + repeated('.', n % m) + repeated(' ', m - n % m),
-      textDim = ctx.measureText(text),
-      textHeight = 20;
-
-  var x1 = (w / 2) - (textDim.width / 2),
-      x2 = x1 + textDim.width,
-      y1 = (h / 2) - (textHeight / 2),
-      y2 = y1 + textHeight;
-  ctx.clearRect(x1, y1 - textHeight, x2 - x1, y2 - y1 + textHeight);
-  ctx.fillText(text, x1, y1);
 };

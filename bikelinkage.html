@@ -3,33 +3,40 @@
   <head>
     <meta charset="UTF-8">
 
+    <script src="canvas.js"></script>
     <script src="drag.js"></script>
     <script src="constraints.js"></script>
     <script src="bikecalc.js"></script>
     <script>
       function init() {
-        var canvas = document.getElementById("cvs");
-        var context = canvas.getContext("2d");
-        var w = canvas.width;
-        var h = canvas.height;
+        var canvas2d = document.getElementById("cvs");
+        var context = canvas2d.getContext("2d");
+        var w = canvas2d.width;
+        var h = canvas2d.height;
 
-        var bike = new Enduro29_M(context, w, h, w * 0.45, h * 0.4);
+        var canvas = new ScaledCanvas(
+          context, w, h,
+          1500, // view port physical width: 1500mm.
+          pt(w / 2, h / 2) // origin in the middle of the image.
+          );
+
+        var bike = new Enduro29_M(canvas);
 
         var dragging = function(dragged_index, start, end) {
           var links = bike.links, len = links.length, point = null;
-          start = bike.screenToPhysCoordinates(start[0], start[1]);
-          end = bike.screenToPhysCoordinates(end[0], end[1]);
+          start = canvas.screenToPhysCoordinates(start[0], start[1]);
+          end = canvas.screenToPhysCoordinates(end[0], end[1]);
           bike.drawDebugPt(start);
           bike.drawDebugPt(end);
 
           bike.movePoint(dragged_index, end.x, end.y);
-          bike.redraw();
+          bike.draw();
           bike.drawDebugPt(bike.points[dragged_index]);
         };
 
         var canDrag = function(start) {
           var links = bike.links, len = links.length, point = null;
-          start = bike.screenToPhysCoordinates(start[0], start[1]);
+          start = canvas.screenToPhysCoordinates(start[0], start[1]);
           bike.drawDebugPt(start);
 
           var link_index = bike.findClosestPoint(start, 15);
@@ -41,10 +48,14 @@
 
         var dragEnd = function(index, start, end) {
           bike.printData();
+          console.log("%d, %d", start.x, start.y);
         };
 
+        //var solver = new IterativeConstraintSolver(
+        //    context, );
+
         var draghandler = new DragController();
-        draghandler.register(canvas, canDrag, dragging, dragEnd);
+        draghandler.register(canvas2d, canDrag, dragging, dragEnd);
       }
     </script>
   </head>
