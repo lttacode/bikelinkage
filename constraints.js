@@ -142,29 +142,33 @@ RelativeFixedRotatorJoint.prototype.relax = function() {
   var elem_dx = pt_dx(p, this.fixedPt);
   var elem_dy = pt_dy(p, this.fixedPt);
 
-  // Move the floating end half-way to necessary point.
   this.fixedPt = pt(this.fixedPt.x + elem_dx, this.fixedPt.y + elem_dy);
-  this.elemFloat.pinEnd(this.fixedPt, this.floatEnd);
 
-  // Vector from pt1 on line through our third point.
-  var float_pt = this.elemFloat.getEndPt(this.floatEnd);
-  var linePtVect = pt(elem.pt1.x - float_pt.x, elem.pt1.y - float_pt.y),
-      distFloatPtOrtho =
-          linePtVect.x * unitOrtho.x + linePtVect.y * unitOrtho.y;
+  if (this.elemFloat) {
+    this.elemFloat.pinEnd(this.fixedPt, this.floatEnd);
 
-  // Move the linkage bar element half-way towards float point
-  // along its orthogonal.
-  var float_dx = -(distFloatPtOrtho - s.distOrtho) * unitOrtho.x,
-      float_dy = -(distFloatPtOrtho - s.distOrtho) * unitOrtho.y;
-  var end1 = pt(
-      elem.pt1.x + float_dx / 2,
-      elem.pt1.y + float_dy / 2);
-  var end2 = pt(
-      elem.pt2.x + float_dx / 2,
-      elem.pt2.y + float_dy / 2);
+    // Vector from pt1 on line through our third point.
+    var float_pt = this.elemFloat.getEndPt(this.floatEnd);
+    var linePtVect = pt(elem.pt1.x - float_pt.x, elem.pt1.y - float_pt.y),
+        distFloatPtOrtho =
+            linePtVect.x * unitOrtho.x + linePtVect.y * unitOrtho.y;
 
-  elem.pinEnd(end1, 0);
-  elem.pinEnd(end2, 1);
+    // Move the linkage bar element half-way towards float point
+    // along its orthogonal.
+    var float_dx = -(distFloatPtOrtho - s.distOrtho) * unitOrtho.x,
+        float_dy = -(distFloatPtOrtho - s.distOrtho) * unitOrtho.y;
+    var end1 = pt(
+        elem.pt1.x + float_dx / 2,
+        elem.pt1.y + float_dy / 2);
+    var end2 = pt(
+        elem.pt2.x + float_dx / 2,
+        elem.pt2.y + float_dy / 2);
+
+    elem.pinEnd(end1, 0);
+    elem.pinEnd(end2, 1);
+  } else {
+    var float_dx = 0, float_dy = 0;
+  }
 
   var error = elem_dx * elem_dx + elem_dy * elem_dy +
       float_dx * float_dx + float_dy * float_dy;
@@ -172,6 +176,8 @@ RelativeFixedRotatorJoint.prototype.relax = function() {
 };
 
 RelativeFixedRotatorJoint.prototype.draw = function(canvas) {
+  canvas.line(this.fixedPt, this.elem.pt1);
+  canvas.line(this.fixedPt, this.elem.pt2);
   canvas.strokeStyle("#0099AA");
   canvas.drawMarker(this.fixedPt, 6);
   canvas.drawMarker(this.fixedPt, 12);

@@ -47,7 +47,8 @@ var Bike = function(
     geo,
     img_url, img_origin, img_scale,
     links,
-    shock, stroke, shock_attach_link) {
+    shock, stroke, shock_attach_link,
+    wheel_attach_link) {
   this.geo = geo;
   this.name = name;
 
@@ -63,6 +64,8 @@ var Bike = function(
   this.shock = shock;
   this.shock_stroke = stroke;
   this.shock_link = shock_attach_link;
+
+  this.wheel_link = wheel_attach_link;
 
   this.points = [];
   this.points.push.apply(this.points, links);
@@ -112,6 +115,25 @@ Bike.prototype.drawLinkage = function() {
   }
 };
 
+// Calculate the locatio of the rear triangle by finding ground via bb
+// height, then the the y position of the rear wheel via wheel radius, and
+// triangulating with chainstay length. Simplified via
+// cos(arccos(x)) == sqrt(1 - x^2)
+// d = (wheel_radius - bb_height) / cs_length.
+// rear_x = cos(arcsin(d)) * cs_length = sqrt(1 - d^2) * cs_length.
+Bike.prototype.calculateRearAxlePosition = function() {
+  var geo = this.geo,
+      bb_pos = this.calculateBbPosition(),
+      d = (geo.wheel_radius - geo.bb_height) / geo.cs_length,
+      rear_y = bb_pos.y - geo.bb_height + geo.wheel_radius,
+      rear_x = bb_pos.x - Math.sqrt(1 - d * d) * geo.cs_length;
+  return pt(rear_x, rear_y);
+}
+
+Bike.prototype.calculateBbPosition = function() {
+  return pt(0, 0);
+}
+
 Bike.prototype.draw = function() {
   var ctx = this.canvas;
   ctx.drawBackground(this.bg_image, this.img_scale, this.img_origin);
@@ -125,17 +147,7 @@ Bike.prototype.draw = function() {
   var ht_lower = move_pt_a(ht_upper, geo.ht_len, geo.ht_angle + 90.);
   var st_upper = move_pt_a(bb_pos, geo.st_len, geo.st_angle - 90.);
   var st_mid = move_pt_a(bb_pos, geo.st_len * 0.7, geo.st_angle - 90.);
-
-  // Calculate the locatio of the rear triangle by finding ground via bb
-  // height, then the the y position of the rear wheel via wheel radius, and
-  // triangulating with chainstay length. Simplified via
-  // cos(arccos(x)) == sqrt(1 - x^2)
-  // d = (wheel_radius - bb_height) / cs_length.
-  // rear_x = cos(arcsin(d)) * cs_length = sqrt(1 - d^2) * cs_length.
-  var d = (geo.wheel_radius - geo.bb_height) / geo.cs_length,
-      rear_y = bb_pos.y - geo.bb_height + geo.wheel_radius,
-      rear_x = bb_pos.x - Math.sqrt(1 - d * d) * geo.cs_length;
-  var rear_axle = pt(rear_x, rear_y);
+  var rear_axle = this.calculateRearAxlePosition();
 
   ctx.strokeStyle("#0000FF");
   ctx.lineWithMarkers(bb_pos, ht_lower);
@@ -222,6 +234,14 @@ Bike.prototype.buildConstraints = function() {
   constraints.push(shockFixedEnd);
   constraints.push(shockRelativeLink);
 
+  // Attach rear axle.
+  var rear_axle = this.calculateRearAxlePosition();
+  var axle_link = linkBarElements[this.wheel_link];
+  // TODO(ltta): Create a rigid joint to affix rear axle.
+  var rear_joint = new RelativeFixedRotatorJoint(
+      rear_axle, axle_link, null, -1);
+  constraints.push(rear_joint);
+
   return constraints;
 };
 
@@ -256,7 +276,7 @@ var Enduro29_M = function(ctx) {
 
       "Specialized Enduro 29 - M",
       // Geometry:
-      new Geometry(425, 632, 335, 425, 445, 75, 67.5, 120, wheel_29),
+      new Geometry(425, 632, 340, 425, 445, 75, 67.5, 120, wheel_29),
       // Background image:
       'http://brimages.bikeboardmedia.netdna-cdn.com/wp-content/uploads/2013/02/S-Works-Enduro-29r.jpg',
       pt(515, 451), 0.71,
@@ -271,8 +291,9 @@ var Enduro29_M = function(ctx) {
       // Rear triangle links:
       [pt(13, 35), pt(-390, -2), pt(-70, 220), pt(13, 210)],
       // Rear shock:
-      [pt(-42, 230), pt(198, 378)], 57, 2
-
+      [pt(-42, 230), pt(198, 378)], 57, 2,
+      // Link rear axle is attached to:
+      1
       );
 };
 
@@ -294,8 +315,9 @@ var Orange322_17 = function(ctx) {
       // Rear triangle links:
       [pt(28, 55), pt(-457, -10)],
       // Rear shock:
-      [pt(-17, 228), pt(220, 255)], 76, 0
-
+      [pt(-17, 228), pt(220, 255)], 76, 0,
+      // Link rear axle is attached to:
+      0
       );
 }
 
@@ -313,7 +335,9 @@ var Nomad_275_M = function(ctx) {
       // Rear triangle links:
       [pt(-7, 38), pt(-52, 3), pt(0, 235), pt(-15, 320)],
       // Rear shock:
-      [pt(38, 238), pt(220, 335)], 63, 2
+      [pt(38, 238), pt(220, 335)], 63, 2,
+      // Link rear axle is attached to:
+      1
 
       );
 }
