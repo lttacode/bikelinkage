@@ -18,8 +18,6 @@ ConstraintsController.prototype.dragging = function() {
     var links = self.bikeSim.links,
         len = links.length,
         point = null;
-    var old_pos = self.constraints[dragged_index].position();
-
     start = self.canvas.screenToPhysCoordinates(start[0], start[1]);
     end = self.canvas.screenToPhysCoordinates(end[0], end[1]);
 
@@ -28,10 +26,10 @@ ConstraintsController.prototype.dragging = function() {
     // If the movement failed, move back to old position and solve again,
     // alternative would be deep copy the state and just discard new state.
     if (!self.solver.solve()) {
-      self.constraints[dragged_index].moveTo(old_pos);
-      self.solver.solve();
+      return true;
     };
     self.solver.drawConstraints();
+    return true;
   }
 };
 

@@ -25,6 +25,9 @@ ScaledCanvas.prototype.drawBackground = function(
 };
 
 ScaledCanvas.prototype.drawMarker = function(pt, markerWidth) {
+  var lineWidth = this.ctx.lineWidth;
+  this.ctx.lineWidth = 1;
+
   pt = transform(pt, this.scale, this.origin);
   if (!markerWidth) {
     markerWidth = this.markerWidth;
@@ -34,6 +37,8 @@ ScaledCanvas.prototype.drawMarker = function(pt, markerWidth) {
       pt.y - markerWidth / 2,
       markerWidth,
       markerWidth);
+
+  this.ctx.lineWidth = lineWidth;
 }
 
 ScaledCanvas.prototype.line = function(from, to) {

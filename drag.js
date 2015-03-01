@@ -61,7 +61,9 @@ DragController.prototype.mouseDragging = function() {
       var pos = self.adjustEventPoint(e);
 
       if (self.handler) {
-        self.handler(self.dragObject, self.startpos, pos);
+        if (!self.handler(self.dragObject, self.startpos, pos)) {
+          self.dragging = false;
+        }
       }
     }
   }

@@ -62,7 +62,7 @@ FixedRotatorJoint.prototype.draw = function(canvas) {
   var d = 4;
   var pt = this.elemEnd == 0 ? this.elem.pt1 : this.elem.pt2;
 
-  canvas.strokeStyle("#FF0000");
+  canvas.strokeStyle("#aa6699");
   canvas.drawMarker(pt, 6);
   canvas.drawMarker(pt, 10);
 };
@@ -100,7 +100,7 @@ var RelativeFixedRotatorJoint = function(
 
   // Orthogonal vector to lineVect.
   var orthoVect = pt(lineVect.y, -lineVect.x),
-      orthoLen = vec_len(lineVect),
+      orthoLen = vec_len(orthoVect),
       unitOrtho = pt(orthoVect.x / orthoLen, orthoVect.y / orthoLen);
 
   // Vector from pt1 on line through our third point.
@@ -112,12 +112,6 @@ var RelativeFixedRotatorJoint = function(
   // Distance of point projected along orthoganl to line of element.
   var distPtAlongOrtho =
       (linePtVect.x * unitOrtho.x + linePtVect.y * unitOrtho.y);
-
-  var vl = vec_len(lineVect), ol = vec_len(orthoVect),
-      va = (linePtVect.x * lineVect.x + linePtVect.y * lineVect.y);
-
-  debugVect(lineVect, "#0000FF");
-  debugVect(orthoVect, "#00FF00");
 
   this.distLine = distPtAlongLine;
   this.distOrtho = distPtAlongOrtho;
@@ -133,7 +127,7 @@ RelativeFixedRotatorJoint.prototype.relax = function() {
 
   // Orthogonal vector to lineVect.
   var orthoVect = pt(lineVect.y, -lineVect.x),
-      orthoLen = vec_len(lineVect),
+      orthoLen = vec_len(orthoVect),
       unitOrtho = pt(orthoVect.x / orthoLen, orthoVect.y / orthoLen);
 
   // New location is elem.pt1 + distOrtho along orthoVect + distLine along
@@ -152,15 +146,28 @@ RelativeFixedRotatorJoint.prototype.relax = function() {
   this.fixedPt = pt(this.fixedPt.x + elem_dx, this.fixedPt.y + elem_dy);
   this.elemFloat.pinEnd(this.fixedPt, this.floatEnd);
 
-  // Move the linkage bar element half-way towards link as well.
-  elem.pinEnd(pt(elem.pt1.x + elem_dx / 2, elem.pt1.y + elem_dx / 2), 0);
-  elem.pinEnd(pt(elem.pt2.x + elem_dx / 2, elem.pt2.y + elem_dx / 2), 1);
+  // Vector from pt1 on line through our third point.
+  var float_pt = this.elemFloat.getEndPt(this.floatEnd);
+  var linePtVect = pt(elem.pt1.x - float_pt.x, elem.pt1.y - float_pt.y),
+      distFloatPtOrtho =
+          linePtVect.x * unitOrtho.x + linePtVect.y * unitOrtho.y;
 
-  window.debugCanvas.strokeStyle("#FF00FF");
-  window.debugCanvas.drawMarker(pt(elem.pt1.x + dx / 2, elem.pt1.y + dy / 2));
-  window.debugCanvas.drawMarker(pt(elem.pt2.x + dx, elem.pt2.y + dy));
+  // Move the linkage bar element half-way towards float point
+  // along its orthogonal.
+  var float_dx = -(distFloatPtOrtho - s.distOrtho) * unitOrtho.x,
+      float_dy = -(distFloatPtOrtho - s.distOrtho) * unitOrtho.y;
+  var end1 = pt(
+      elem.pt1.x + float_dx / 2,
+      elem.pt1.y + float_dy / 2);
+  var end2 = pt(
+      elem.pt2.x + float_dx / 2,
+      elem.pt2.y + float_dy / 2);
 
-  var error = elem_dx * elem_dx + elem_dy * elem_dy;
+  elem.pinEnd(end1, 0);
+  elem.pinEnd(end2, 1);
+
+  var error = elem_dx * elem_dx + elem_dy * elem_dy +
+      float_dx * float_dx + float_dy * float_dy;
   return error;
 };
 
@@ -215,7 +222,7 @@ BarElement.prototype.lengthenTo = function(toLength) {
 };
 
 BarElement.prototype.draw = function(canvas) {
-  //canvas.strokeStyle("#FF00FF");
+  canvas.strokeStyle("#aa6699");
   canvas.line(this.pt1, this.pt2);
 };
 
@@ -230,6 +237,10 @@ BarElement.prototype.pinEnd = function(pt, end) {
   }
   return dt;
 };
+
+BarElement.prototype.getEndPt = function(end) {
+  return end == 0 ? this.pt1 : this.pt2;
+}
 
 BarElement.prototype.makeEndJointed = function(end) {
   this.jointedEnds[end] = true;
@@ -257,9 +268,6 @@ BarElement.prototype.moveTo = function(to) {
 };
 
 BarElement.prototype.position = function() {
-  // TODO(ltta): This doesn't really work but we mostly move joints.
-  debugger;
-
   if (!this.jointedEnds[1]) {
     return this.pt2;
   }
@@ -292,13 +300,17 @@ Spring.prototype.parent = BarElement;
 
 Spring.prototype.relax = function() {
   var l = pt_diff(this.pt1, this.pt2);
-
   if (l < this.minLength * this.minLength) {
     return this.lengthenTo(this.minLength);
   } else if (l > this.maxLength * this.maxLength) {
     return this.lengthenTo(this.maxLength);
   }
   return 0;
+};
+
+Spring.prototype.pinEnd = function(pt, end) {
+  var res = Spring.prototype.parent.prototype.pinEnd.call(this, pt, end);
+  return this.relax() + res;
 };
 
 
@@ -328,7 +340,6 @@ IterativeConstraintSolver.prototype.solve = function() {
       }
     }
   }
-  console.log(error, iter);
   return error < 2 * this.epsilon;
 };
 
@@ -336,13 +347,18 @@ IterativeConstraintSolver.prototype.drawConstraints = function(strokeStyle) {
   this.canvas.clear();
 
   if (!strokeStyle) {
-    strokeStyle = "#FF0000";
+    strokeStyle = "#aa6699";
   }
   this.canvas.strokeStyle(strokeStyle);
+
+  var lineWidth = this.canvas.ctx.lineWidth;
+  this.canvas.ctx.lineWidth = 2;
 
   for (var i = 0; i < this.constraints.length; ++i) {
     this.constraints[i].draw(this.canvas);
   }
+
+  this.canvas.ctx.lineWidth = lineWidth;
 }
 
 IterativeConstraintSolver.prototype.findClosestConstraint = function(

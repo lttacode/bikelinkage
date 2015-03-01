@@ -10,6 +10,11 @@
     <script src="linkage_controller.js"></script>
     <script src="constraints_controller.js"></script>
     <script>
+      canvas = null;
+      solverCanvas = null;
+      bikes = null;
+      bike = null;
+
       function makeCanvas(id) {
         var canvas2d = document.getElementById(id);
         var context = canvas2d.getContext("2d");
@@ -25,46 +30,132 @@
         return canvas;
       };
 
-      function init() {
-        var canvas = makeCanvas('canvasBike');
-        var bike = new Enduro29_M(canvas);
-        //var bike = new Orange322_17(canvas);
+      function initBike(bike) {
+        bike.loadBackground();
 
-        var solverCanvas = makeCanvas('canvasLinkage');
         var solver = new IterativeConstraintSolver(
             solverCanvas, bike.buildConstraints(),
-            10 /* epsilon */,
-            50 /* max iterations */);
+            2 /* epsilon */,
+            10 /* max iterations */);
         solver.drawConstraints();
 
         var draghandler = new DragController();
 
         var controller = new ConstraintsController(
             solverCanvas, bike, solver, draghandler);
+
+        setImageOriginText(bike.img_origin);
+        setImageScale(bike.img_scale);
+      }
+
+      function selectBike() {
+        bike = bikes[document.getElementById("bikeSelector").value];
+        initBike(bike);
+      }
+
+      function init() {
+        canvas = makeCanvas('canvasBike');
+        solverCanvas = makeCanvas('canvasLinkage');
+
+        bikes = getBikes(canvas);
+        var bike = bikes[0];
+        initBike(bike);
+
+        //var bike = new Enduro29_M(canvas);
+        //var bike = new Orange322_17(canvas);
+
+        var bikeSelector = document.getElementById("bikeSelector");
+        for (var i = 0; i < bikes.length; ++i) {
+          bikeSelector.options[bikeSelector.options.length] =
+              new Option(bikes[i].name, i);
+        }
+      }
+    </script>
+
+    <script>
+      function setImageOriginText(img_origin) {
+        var txt = document.getElementById("txtBB");
+        txt.value = img_origin.x + "," + img_origin.y;
+      }
+
+      function updateImageOrigin() {
+        var txt = document.getElementById("txtBB"),
+            vals = txt.value.split(","),
+            bb_x = parseInt(vals[0]),
+            bb_y = parseInt(vals[1]);
+        if (!(isNaN(bb_x) && isNaN(bb_y))) {
+          bike.img_origin = pt(bb_x, bb_y);
+          bike.draw();
+        }
+      }
+
+      function setImageScale(img_scale) {
+        var txt = document.getElementById("txtScale");
+        txt.value = img_scale;
+      }
+
+      function updateImageScale() {
+        var txt = document.getElementById("txtScale"),
+            scale = parseFloat(txt.value);
+        if (!isNaN(scale)) {
+          bike.img_scale = scale;
+          bike.draw();
+        }
       }
     </script>
 
     <style>
-    #canvasBike, #canvasLinkage {
-        background:transparent;
-        display: block;
-        position: absolute;
-        left: 0;
-        top: 0;
-        z-index: 0;
-    }
-    #canvasLinkage {
-      z-index: 1;
-    }
-    #canvasBike {
-      /* display: none; */
-    }
+      #canvasBike, #canvasLinkage {
+          background:transparent;
+          display: block;
+          left: 0;
+          position: absolute;
+          top: 0;
+          z-index: 0;
+      }
+
+      #canvasBike {
+        /*display: none;*/
+      }
+
+      #canvasContainer {
+        display: inline-block;
+        position: relative;
+        width: 600px;
+      }
+
+      #canvasLinkage {
+        z-index: 1;
+      }
+
+      #settings {
+        display: inline-block;
+        margin: 20px 20px;
+        width: 300px;
+      }
+
+      #settings label {
+        display: inline-block;
+        width: 140px;
+      }
     </style>
   </head>
   <body onLoad="javascript:init()">
-    <div style="position: relative;">
+    <div id="canvasContainer">
       <canvas id="canvasBike" width="600" height="600"></canvas>
       <canvas id="canvasLinkage" width="600" height="600"></canvas>
+    </div>
+    <div id="settings">
+      <select id="bikeSelector" onchange="selectBike();"></select>
+      <br />
+
+      <label for="txtScale">Scale:</label>
+      <input type="text" name="txtScale" id="txtScale" onchange="updateImageScale();" />
+      <br />
+
+      <label for="txtBB">Image origin (BB):</label>
+      <input type="text" name="txtBB" id="txtBB" onchange="updateImageOrigin();" />
+      <br />
     </div>
   </body>
 </html>

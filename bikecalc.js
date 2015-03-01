@@ -1,5 +1,6 @@
 var wheel_29 = 366.5; // WTB Exiwolf 29x2.3 based on circumference 2302mm.
 var wheel_26x240 = 340.5; // 26x2.40 tire.
+var wheel_275x235 = 356; // 27.5x2.35 tire.
 
 var Geometry = function(
     reach, stack, bb_height, cs_length, st_len, st_angle, ht_angle, ht_len,
@@ -42,16 +43,17 @@ function move_pt_a(from, dist, angle) {
 
 var Bike = function(
     canvas,
+    name,
     geo,
     img_url, img_origin, img_scale,
     links,
     shock, stroke, shock_attach_link) {
   this.geo = geo;
+  this.name = name;
 
   this.canvas = canvas;
 
   this.bg_image = new Image();
-  var self = this;
 
   this.img_url = img_url;
   this.img_origin = img_origin;
@@ -65,20 +67,30 @@ var Bike = function(
   this.points = [];
   this.points.push.apply(this.points, links);
   this.points.push.apply(this.points, shock);
-
-  // Load background image.
-  var n = 1;
-  var loadInterval = setInterval(function() {
-    canvas.drawLoading(n, 4);
-    n += 1;
-  }, 500);
-
-  this.bg_image.onload = function() {
-    clearInterval(loadInterval);
-    self.draw();
-  }
-  this.bg_image.src = img_url;
 };
+
+Bike.prototype.loadBackground = function() {
+  this.canvas.clear();
+
+  if (!this.bg_image.src) {
+    // Load background image.
+    var self = this;
+
+    var n = 1;
+    var loadInterval = setInterval(function() {
+      self.canvas.drawLoading(n, 4);
+      n += 1;
+    }, 500);
+    this.bg_image.src = this.img_url;
+
+    this.bg_image.onload = function() {
+      clearInterval(loadInterval);
+      self.draw();
+    }
+  } else {
+    this.draw();
+  }
+}
 
 Bike.prototype.drawShock = function() {
   this.canvas.strokeStyle("#00FF00");
@@ -219,7 +231,7 @@ Bike.prototype.printData = function() {
   console.log(
     (
       "// Geometry:\n" +
-      "new Geometry(%i, %i, %i, %i, %i, %f, %f, %i, %f),\n" +
+      "new Geometry(%f, %f, %f, %f, %f, %f, %f, %f, %f),\n" +
       "// Background image:\n" +
       "'%s',\n" +
       "pt(%d, %d), %f,\n" +
@@ -242,6 +254,7 @@ var Enduro29_M = function(ctx) {
   return new Bike(
       ctx,
 
+      "Specialized Enduro 29 - M",
       // Geometry:
       new Geometry(425, 632, 335, 425, 445, 75, 67.5, 120, wheel_29),
       // Background image:
@@ -268,6 +281,7 @@ var Orange322_17 = function(ctx) {
   return new Bike(
       ctx,
 
+      "Orange 322 - 17\"",
       // Geometry:
       new Geometry(400, 590, bb_height, 460, 431.8, 74, 63, 120, wheel_26x240),
       // Background image:
@@ -280,9 +294,37 @@ var Orange322_17 = function(ctx) {
       // Rear triangle links:
       [pt(28, 55), pt(-457, -10)],
       // Rear shock:
-      [pt(-17, 228), pt(220, 255)], 57, 0
+      [pt(-17, 228), pt(220, 255)], 76, 0
 
       );
+}
+
+var Nomad_275_M = function(ctx) {
+  return new Bike(
+      ctx,
+
+      "Santa Cruz Nomad C 27.5 - M",
+      // Geometry:
+      new Geometry(415, 600, 340, 433.1, 419.1, 74.2, 65, 100, wheel_275x235),
+      // Background image:
+      "http://dirtragmag.com/wp-content/uploads/2014/10/Santa-Cruz-Nomad-2015-First-Impression—WEB-6-of-27.jpg",
+      pt(392, 365), 1.07,
+
+      // Rear triangle links:
+      [pt(-7, 38), pt(-52, 3), pt(0, 235), pt(-15, 320)],
+      // Rear shock:
+      [pt(38, 238), pt(220, 335)], 63, 2
+
+      );
+}
+
+function getBikes(ctx) {
+  var bikes = [Enduro29_M, Orange322_17, Nomad_275_M],
+      res = [];
+  for (var i = 0; i < bikes.length; ++i) {
+    res.push(bikes[i].call(this, ctx));
+  }
+  return res;
 }
 
 // Utilities.

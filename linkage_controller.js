@@ -25,6 +25,8 @@ LinkageController.prototype.dragging = function() {
     self.bikeSim.movePoint(dragged_index, end.x, end.y);
     self.bikeSim.draw();
     self.bikeSim.drawDebugPt(self.bikeSim.points[dragged_index]);
+
+    return true;
   }
 };
 
