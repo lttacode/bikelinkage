@@ -319,6 +319,11 @@ Spring.prototype.pinEnd = function(pt, end) {
   return this.relax() + res;
 };
 
+Spring.prototype.draw = function(canvas) {
+  canvas.strokeStyle("rgba(255, 255, 0, 0.7)");
+  canvas.line(this.pt1, this.pt2);
+};
+
 
 // Iterative constraint relaxation solver.
 
@@ -358,7 +363,7 @@ IterativeConstraintSolver.prototype.drawConstraints = function(strokeStyle) {
   this.canvas.strokeStyle(strokeStyle);
 
   var lineWidth = this.canvas.ctx.lineWidth;
-  this.canvas.ctx.lineWidth = 2;
+  this.canvas.ctx.lineWidth = 3;
 
   for (var i = 0; i < this.constraints.length; ++i) {
     this.constraints[i].draw(this.canvas);
