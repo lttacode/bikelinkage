@@ -1,9 +1,10 @@
 
 // Rotating joint constraint, e.g. bearings.
 
-var RotatorJoint = function(elem1, elem2) {
+var RotatorJoint = function(name, elem1, elem2) {
   this.elem1 = elem1;
   this.elem2 = elem2;
+  this.name = name;
 
   elem1.makeEndJointed(1);
   elem2.makeEndJointed(0);
@@ -47,10 +48,11 @@ RotatorJoint.prototype.distance = function(from) {
 
 // Half-fixed rotating joint constraints, e.g. affixed bearing.
 
-var FixedRotatorJoint = function(fixed_pt, elem, elem_end) {
+var FixedRotatorJoint = function(name, fixed_pt, elem, elem_end) {
   this.fixedPt = fixed_pt;
   this.elem = elem;
   this.elemEnd = elem_end;
+  this.name = name;
   elem.makeEndJointed(elem_end);
 };
 
@@ -85,6 +87,7 @@ FixedRotatorJoint.prototype.distance = function(from) {
 // relative to a bar.
 
 var RelativeFixedRotatorJoint = function(
+    name,
     fixed_pt,
     elem,
     elem_float, float_end) {
@@ -92,6 +95,7 @@ var RelativeFixedRotatorJoint = function(
   this.elem = elem;
   this.elemFloat = elem_float;
   this.floatEnd = float_end;
+  this.name = name;
 
   // Vector through points of elem.
   var lineVect = pt(elem.pt1.x - elem.pt2.x, elem.pt1.y - elem.pt2.y),
@@ -136,8 +140,8 @@ RelativeFixedRotatorJoint.prototype.relax = function() {
   var dx = s.distOrtho * unitOrtho.x + s.distLine * unitLine.x,
       dy = s.distOrtho * unitOrtho.y + s.distLine * unitLine.y;
   var p = pt(
-      elem.pt1.x - dx,
-      elem.pt1.y - dy);
+      elem.pt1.x - dx / 2,
+      elem.pt1.y - dy / 2);
 
   var elem_dx = pt_dx(p, this.fixedPt);
   var elem_dy = pt_dy(p, this.fixedPt);
@@ -145,24 +149,21 @@ RelativeFixedRotatorJoint.prototype.relax = function() {
   this.fixedPt = pt(this.fixedPt.x + elem_dx, this.fixedPt.y + elem_dy);
 
   if (this.elemFloat) {
-    this.elemFloat.pinEnd(this.fixedPt, this.floatEnd);
+    var dl = Math.sqrt(pt_diff(this.elemFloat.pt1, this.elemFloat.pt2));
+    var force_vect = this.elemFloat.getForceVector(),
+        float_dx = force_vect.x / 2,
+        float_dy = force_vect.y / 2;
 
-    // Vector from pt1 on line through our third point.
-    var float_pt = this.elemFloat.getEndPt(this.floatEnd);
-    var linePtVect = pt(elem.pt1.x - float_pt.x, elem.pt1.y - float_pt.y),
-        distFloatPtOrtho =
-            linePtVect.x * unitOrtho.x + linePtVect.y * unitOrtho.y;
+    debugLog("Force: " + force_vect.x + ", " + force_vect.y);
 
-    // Move the linkage bar element half-way towards float point
-    // along its orthogonal.
-    var float_dx = -(distFloatPtOrtho - s.distOrtho) * unitOrtho.x,
-        float_dy = -(distFloatPtOrtho - s.distOrtho) * unitOrtho.y;
     var end1 = pt(
-        elem.pt1.x + float_dx / 2,
-        elem.pt1.y + float_dy / 2);
+        elem.pt1.x + float_dx,
+        elem.pt1.y + float_dy);
     var end2 = pt(
-        elem.pt2.x + float_dx / 2,
-        elem.pt2.y + float_dy / 2);
+        elem.pt2.x + float_dx,
+        elem.pt2.y + float_dy);
+
+    this.elemFloat.pinEnd(this.fixedPt, this.floatEnd);
 
     elem.pinEnd(end1, 0);
     elem.pinEnd(end2, 1);
@@ -198,9 +199,10 @@ RelativeFixedRotatorJoint.prototype.distance = function(from) {
 
 // Bar element, fixed connection between two joints.
 
-var BarElement = function(pt1, pt2) {
+var BarElement = function(name, pt1, pt2) {
   this.pt1 = pt1;
   this.pt2 = pt2;
+  this.name = name;
 
   // If the ends are jointed, then they cannot be dragged, otherwise they can.
   this.jointedEnds = [false, false];
@@ -214,15 +216,23 @@ BarElement.prototype.relax = function() {
   return this.lengthenTo(this.length);
 }
 
-BarElement.prototype.lengthenTo = function(toLength) {
+BarElement.prototype.lengthenTo = function(toLength, ends) {
   var l = pt_diff(this.pt1, this.pt2),
       sl = Math.sqrt(l),
-      dl = (toLength - sl) / 2,
+      dl = (toLength - sl),
       dx = (this.pt1.x - this.pt2.x) / sl,
       dy = (this.pt1.y - this.pt2.y) / sl;
 
-  this.pt1 = pt(this.pt1.x + dl * dx, this.pt1.y + dl * dy);
-  this.pt2 = pt(this.pt2.x - dl * dx, this.pt2.y - dl * dy);
+  if (!ends || ends.length == 2) {
+    this.pt1 = pt(this.pt1.x + dl * dx / 2, this.pt1.y + dl * dy / 2);
+    this.pt2 = pt(this.pt2.x - dl * dx / 2, this.pt2.y - dl * dy / 2);
+  } else {
+    if (ends[0] == 1) {
+      this.pt2 = pt(this.pt2.x - dl * dx, this.pt2.y - dl * dy);
+    } else {
+      this.pt1 = pt(this.pt1.x + dl * dx, this.pt1.y + dl * dy);
+    }
+  }
 
   return dl * dl;
 };
@@ -250,6 +260,14 @@ BarElement.prototype.getEndPt = function(end) {
 
 BarElement.prototype.makeEndJointed = function(end) {
   this.jointedEnds[end] = true;
+}
+
+BarElement.prototype.calculateLength2 = function() {
+  return pt_diff(this.pt1, this.pt2);
+}
+
+BarElement.prototype.calculateLength = function() {
+  return Math.sqrt(pt_diff(this.pt1, this.pt2));
 }
 
 BarElement.prototype.moveTo = function(to) {
@@ -290,38 +308,86 @@ BarElement.prototype.distance = function(from) {
   return Math.min(d1, d2);
 };
 
+BarElement.prototype.calculateForceVector = function(forLength) {
+  var l = pt_diff(this.pt1, this.pt2),
+      sl = Math.sqrt(l),
+      dl = (sl - forLength),
+      dx = -(this.pt2.x - this.pt1.x) / sl,
+      dy = -(this.pt2.y - this.pt1.y) / sl;
+
+  return pt(dl * dx, dl * dy);
+};
+
+BarElement.prototype.getForceVector = function() {
+  return this.calculateForceVector(this.length);
+}
+
 
 // Spring, elastic connetion between to joints, stroke defines maximum
 // compression, initial length is maximum extension.
 
-var Spring = function(pt1, pt2, stroke) {
+var Spring = function(name, pt1, pt2, stroke, compressed_ends) {
   this.stroke = stroke;
-  Spring.prototype.parent.call(this, pt1, pt2);
+  this.compression = 0;
+  this.compressedEnds = compressed_ends;
+  this.epsilon = 0.999;
+  Spring.prototype.parent.call(this, name, pt1, pt2);
 
   this.maxLength = this.length;
   this.minLength = this.length - stroke;
+  this.pinnedLength = this.length;
 };
 Spring.prototype = Object.create(BarElement.prototype);
 Spring.prototype.parent = BarElement;
 
+Spring.prototype.calculateDesiredLength = function() {
+  var l = this.calculateLength2() * this.epsilon,
+      min = this.minLength,
+      max = this.maxLength,
+      l2 = this.stroke / 2;
+  if (this.compression) {
+    debugLog("Compressed Length: " + l +","+ (max - this.compression));
+    return this.maxLength - this.compression;
+  } else if (l < min * min) {
+    debugLog("Min Length: " + l + " = " + (min * min) + " : " + (min + l2));
+    return min + l2;
+  } else if (l > max * max) {
+    debugLog("Max Length: " + ( max - l2));
+    return max - l2;
+  }
+  return -1;
+}
+
 Spring.prototype.relax = function() {
-  var l = pt_diff(this.pt1, this.pt2);
-  if (l < this.minLength * this.minLength) {
-    return this.lengthenTo(this.minLength);
-  } else if (l > this.maxLength * this.maxLength) {
-    return this.lengthenTo(this.maxLength);
+  var dl = this.calculateDesiredLength();
+  if (dl >= 0) {
+    return this.lengthenTo(dl, this.compressedEnds);
   }
   return 0;
 };
 
 Spring.prototype.pinEnd = function(pt, end) {
   var res = Spring.prototype.parent.prototype.pinEnd.call(this, pt, end);
-  return this.relax() + res;
+  var dl = this.calculateDesiredLength();
+  this.pinnedLength = dl >= 0 ? this.calculateForceVector(dl) : null;
+  return res;
 };
 
 Spring.prototype.draw = function(canvas) {
   canvas.strokeStyle("rgba(255, 255, 0, 0.7)");
   canvas.line(this.pt1, this.pt2);
+};
+
+Spring.prototype.setCompression = function(compression) {
+  this.compression = compression;
+}
+
+Spring.prototype.measureCompression = function() {
+  return this.maxLength - this.calculateLength();
+}
+
+Spring.prototype.getForceVector = function() {
+  return this.pinnedLength ? this.pinnedLength : pt(0, 0);
 };
 
 
@@ -333,13 +399,12 @@ var IterativeConstraintSolver = function(
   this.epsilon = epsilon;
   this.maxIter = max_iter;
   this.canvas = canvas;
-
-  window.debugCanvas = canvas;
 };
 
 IterativeConstraintSolver.prototype.solve = function() {
   var error = 2 * this.epsilon;
   var iter = 0;
+
   while (error > this.epsilon && iter++ < this.maxIter) {
     error = 0;
     for (var i = 0; i < this.constraints.length; ++i) {
@@ -350,12 +415,18 @@ IterativeConstraintSolver.prototype.solve = function() {
         debugger;
       }
     }
+    this.drawConstraints();
   }
-  return error < 2 * this.epsilon;
+  var succeeded = error < 2 * this.epsilon;
+  if (!succeeded) {
+    console.log("solve did not succeed: error", error);
+  }
+  return succeeded;
 };
 
 IterativeConstraintSolver.prototype.drawConstraints = function(strokeStyle) {
   this.canvas.clear();
+  //debugClear();
 
   if (!strokeStyle) {
     strokeStyle = "#aa6699";
@@ -370,7 +441,7 @@ IterativeConstraintSolver.prototype.drawConstraints = function(strokeStyle) {
   }
 
   this.canvas.ctx.lineWidth = lineWidth;
-}
+};
 
 IterativeConstraintSolver.prototype.findClosestConstraint = function(
        point, max_dist) {
@@ -386,20 +457,19 @@ IterativeConstraintSolver.prototype.findClosestConstraint = function(
   return null;
 };
 
-
 // Utilities.
 
 function pt_dy(pt1, pt2) {
   return pt1.y - pt2.y;
-}
+};
 
 function pt_dx(pt1, pt2) {
   return pt1.x - pt2.x;
-}
+};
 
 function vec_len(v) {
   return Math.sqrt(v.x * v.x + v.y * v.y);
-}
+};
 
 // Distance of point pt from line defined by points line_pt1, line_pt2.
 function pt_ln_dist(line_pt1, line_pt2, pt) {
@@ -412,32 +482,79 @@ function pt_ln_dist(line_pt1, line_pt2, pt) {
 
   return Math.abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 + y2 * x1) /
       Math.sqrt(pt_diff(line_pt2, line_pt1));
-}
+};
 
 function pt_diff(pt1, pt2) {
   var dx = pt1.x - pt2.x,
       dy = pt1.y - pt2.y;
   return dx * dx + dy * dy;
-}
+};
 
 // Some quick hacks for debugging the linear algebra.
 
 window.debugCanvas = null;
 
-function debugVect(v, s) {
-  if (window.debugCanvas) {
-    if (s) {
-      window.debugCanvas.strokeStyle(s);
-    }
-    window.debugCanvas.line(pt(300, 300), pt(300 + v.x, 300 + v.y));
+function initDebugCanvas() {
+ if (!window.debugCanvas) {
+    window.debugCanvas = document.getElementById("canvasDebug");
+    window.debugCtx = window.debugCanvas.getContext("2d");
+    window.debugW = window.debugCanvas.width;
+    window.debugH = window.debugCanvas.height;
+    window.debugLine = 0;
   }
-}
+};
 
-function debugPt(p, s) {
-  if (window.debugCanvas) {
-    if (s) {
-      window.debugCanvas.strokeStyle(s);
-    }
-    window.debugCanvas.drawMarker(pt(300 + p.x, 300 + p.y));
+function debugClear() {
+  initDebugCanvas();
+  window.debugLine = 0;
+  window.debugCtx.clearRect(0, 0, window.debugW, window.debugH);
+};
+
+function debugLog(text) {
+  initDebugCanvas();
+  window.debugCtx.fillStyle = "#333";
+  window.debugCtx.font = '10px san-serif';
+
+  var textDim = window.debugCtx.measureText(text),
+      textHeight = 20;
+
+  var x1 = 20,
+      x2 = x1 + textDim.width,
+      y1 = 20 + (textHeight / 2) + window.debugLine,
+      y2 = y1 + textHeight;
+  window.debugCtx.clearRect(x1, y1 - textHeight, x2 - x1, y2 - y1 + textHeight);
+  window.debugCtx.fillText(text, x1, y1);
+  if (window.debugLine > window.debugH) {
+    window.debugLine = 0;
+  } else {
+    window.debugLine += textHeight;
   }
-}
+};
+
+function debugVect(v, s) {
+  initDebugCanvas();
+  if (s) {
+    window.debugCtx.strokeStyle = s;
+  }
+
+  var x = window.debugW / 2, y = window.debugH / 2;
+  window.debugCtx.beginPath();
+  window.debugCtx.moveTo(x, y);
+  window.debugCtx.lineTo(x + v.x, y - v.y);
+  window.debugCtx.stroke();
+};
+
+function debugPt(pt, s) {
+  initDebugCanvas();
+  if (s) {
+    window.debugCtx.strokeStyle = s;
+  }
+
+  var markerWidth = 4;
+
+  window.debugCtx.strokeRect(
+      pt.x - markerWidth / 2,
+      pt.y - markerWidth / 2,
+      markerWidth,
+      markerWidth);
+};

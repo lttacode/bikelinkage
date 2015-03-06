@@ -50,6 +50,8 @@ DragController.prototype.dragEnd = function() {
         self.dragEndCallback(self.dragObject, self.startpos, self.endpos);
       }
       self.dragObject = null;
+      self.startpos = null;
+      self.endpos = null;
     }
   }
 };

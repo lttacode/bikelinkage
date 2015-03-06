@@ -2,6 +2,15 @@ var wheel_29 = 366.5; // WTB Exiwolf 29x2.3 based on circumference 2302mm.
 var wheel_26x240 = 340.5; // 26x2.40 tire.
 var wheel_275x235 = 356; // 27.5x2.35 tire.
 
+var BikeConstraints = function(
+  linkage_links, joints, spring, rear_axle, all_constraints) {
+  this.links = linkage_links;
+  this.joints = joints;
+  this.spring = spring;
+  this.rearAxle = rear_axle;
+  this.constraints = all_constraints;
+}
+
 var Geometry = function(
     reach, stack, bb_height, cs_length, st_len, st_angle, ht_angle, ht_len,
     wheel_radius) {
@@ -186,63 +195,127 @@ Bike.prototype.findClosestPoint = function(pt, max_dist) {
   return closestPt(this.points);
 };
 
-Bike.prototype.buildConstraints = function() {
-  var constraints = [];
+Bike.prototype.calculateWheelCompression = function(
+    solver, constraints, spring, axle, steps) {
+  var ds = spring.stroke / steps,
+      compression = 0,
+      initial_compression = spring.compresion;
+  var wheel_vals = [],
+      shock_vals = [];
 
-  var linkBarElements = [];
+  for (var step = 0; step < steps; ++step) {
+    var succeeded = true,
+        maxIter = 10;
+    spring.setCompression(compression);
+    while (spring.measureCompression() < compression * 0.98 && maxIter-- > 0) {
+      succeeded = succeeded & self.solver.solve();
+    }
+    console.log(spring.measureCompression() , compression, "comp",10 - maxIter,"iterations");
+
+    if (!succeeded) {
+      wheel_vals.push(pt(-1, -1));
+      console.log(-1, -1);
+    } else {
+      wheel_vals.push(axle.fixedPt);
+      console.log(axle.fixedPt.x, axle.fixedPt.y);
+    }
+
+    solver.drawConstraints();
+    spring.setCompression(0);
+    solver.solve();
+
+
+    solver.drawConstraints();
+    shock_vals.push(Math.round(compression));
+    compression += ds;
+  }
+
+  spring.setCompression(initial_compression);
+
+  return [shock_vals, wheel_vals];
+};
+
+Bike.prototype.buildConstraints = function() {
+  var constraints = [],
+      linkBarElements = [],
+      joints = [];
 
   // Need at least two points to define a swinging link.
   if (this.links.length > 1) {
     // Attach first link to main frame with rotating joint.
-    var elem = new BarElement(this.links[0], this.links[1]);
-    var joint = new FixedRotatorJoint(this.links[0], elem, 0);
+    var elem = new BarElement("CS link", this.links[0], this.links[1]);
+    var joint = new FixedRotatorJoint("Fixed joint", this.links[0], elem, 0);
     constraints.push(elem);
     constraints.push(joint);
+
     linkBarElements.push(elem);
+    joints.push(joint);
 
     // Attach all intermediate joints.
     for (var i = 1; i < this.links.length - 2; ++i) {
-      var nextElem = new BarElement(this.links[i], this.links[i + 1]);
-      joint = new RotatorJoint(elem, nextElem);
+      var nextElem = new BarElement("Link " + i, this.links[i], this.links[i + 1]);
+      joint = new RotatorJoint("Link joint " + i, elem, nextElem);
       constraints.push(nextElem);
       constraints.push(joint);
+
       linkBarElements.push(nextElem);
+      joints.push(joint);
+
       elem = nextElem;
     }
 
     // Attach remaining final link, if it exists.
     if (this.links.length > 2) {
       var i = this.links.length - 2;
-      nextElem = new BarElement(this.links[i], this.links[i + 1]);
+      nextElem = new BarElement("Link " + i, this.links[i], this.links[i + 1]);
+      joint = new RotatorJoint("Link joint " + i, elem, nextElem);
+      var fixedJoint = new FixedRotatorJoint("Fixed joint", this.links[i + 1],
+          nextElem, 1);
+
       // Join the previous element with last element as rotating joint.
-      constraints.push(new RotatorJoint(elem, nextElem));
+      constraints.push(joint);
       // Affix last element as fixed joint.
-      constraints.push(new FixedRotatorJoint(this.links[i + 1], nextElem, 1));
+      constraints.push(fixedJoint);
       // Push last bar element as well.
       constraints.push(nextElem);
+
       linkBarElements.push(nextElem);
+      joints.push(joint);
+      joints.push(fixedJoint);
     }
   }
 
   // Build shock constraints.
-  var shock = new Spring(this.shock[0], this.shock[1], this.shock_stroke);
-  var shockFixedEnd = new FixedRotatorJoint(this.shock[1], shock, 1);
+  var shock = new Spring(
+      "Shock", this.shock[0], this.shock[1], this.shock_stroke, [0]);
+  var shockFixedEnd = new FixedRotatorJoint(
+      "Shock fixed end", this.shock[1], shock, 1);
   var shockRelativeLink = new RelativeFixedRotatorJoint(
-    this.shock[0], linkBarElements[this.shock_link], shock, 0);
+      "Shock floating end",
+      this.shock[0], linkBarElements[this.shock_link], shock, 0);
 
   constraints.push(shock);
   constraints.push(shockFixedEnd);
   constraints.push(shockRelativeLink);
+
+  joints.push(shockFixedEnd);
+  joints.push(shockRelativeLink);
 
   // Attach rear axle.
   var rear_axle = this.calculateRearAxlePosition();
   var axle_link = linkBarElements[this.wheel_link];
   // TODO(ltta): Create a rigid joint to affix rear axle.
   var rear_joint = new RelativeFixedRotatorJoint(
+      "Rear axle joint",
       rear_axle, axle_link, null, -1);
   constraints.push(rear_joint);
 
-  return constraints;
+  return new BikeConstraints(
+      linkBarElements,
+      joints,
+      shock,
+      rear_joint,
+      constraints);
 };
 
 Bike.prototype.printData = function() {
@@ -278,12 +351,12 @@ var Enduro29_M = function(ctx) {
       // Geometry:
       new Geometry(425, 632, 340, 425, 445, 75, 67.5, 120, wheel_29),
       // Background image:
-      'http://brimages.bikeboardmedia.netdna-cdn.com/wp-content/uploads/2013/02/S-Works-Enduro-29r.jpg',
-      pt(515, 451), 0.71,
+      //'http://brimages.bikeboardmedia.netdna-cdn.com/wp-content/uploads/2013/02/S-Works-Enduro-29r.jpg',
+      //pt(515, 451), 0.71,
 
       //'http://s7d5.scene7.com/is/image/Specialized/121781?$Hero$',
-      //"resources/enduro29.jpg",
-      //pt(303, 293), 1.015,
+      "resources/enduro29.jpg",
+      pt(303, 293), 1.015,
 
       //'http://stwww.bikemag.com/files/2013/02/broadsideG.jpg',
       // origin, scale tbd

@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8">
 
+    <!-- Chartist
+    <link rel="stylesheet" href="http://rawgit.com/gionkunz/chartist-js/master/dist/chartist.min.css">
+    <script src="http://rawgit.com/gionkunz/chartist-js/master/dist/chartist.min.js"></script>
+    -->
+
+    <!-- Local sources. TODO(ltta): cleanup files, preprocess. -->
     <script src="canvas.js"></script>
     <script src="drag.js"></script>
     <script src="constraints.js"></script>
@@ -14,6 +20,8 @@
       solverCanvas = null;
       bikes = null;
       bike = null;
+      constraints = null;
+      solver = null;
 
       function makeCanvas(id) {
         var canvas2d = document.getElementById(id);
@@ -32,11 +40,13 @@
 
       function initBike(bike) {
         bike.loadBackground();
+        constraints = bike.buildConstraints();
 
-        var solver = new IterativeConstraintSolver(
-            solverCanvas, bike.buildConstraints(),
+        solver = new IterativeConstraintSolver(
+            solverCanvas,
+            constraints.constraints,
             2 /* epsilon */,
-            10 /* max iterations */);
+            50 /* max iterations */);
         solver.drawConstraints();
 
         var draghandler = new DragController();
@@ -51,6 +61,51 @@
       function selectBike() {
         bike = bikes[document.getElementById("bikeSelector").value];
         initBike(bike);
+
+        calculateTravelGraph(bike, solver, constraints);
+      }
+
+      function calculateTravelGraph(bike, solver, constraints) {
+        var comp_data = bike.calculateWheelCompression(
+            solver,
+            constraints.constraints,
+            constraints.spring,
+            constraints.rearAxle,
+            10 /* steps */);
+
+        var travel_vals = [0],
+            wheel_vals = comp_data[1],
+            prev_wheel = wheel_vals[0],
+            travel = 0;
+
+        for (var i = 1; i < wheel_vals.length; ++i) {
+          var curr_wheel = wheel_vals[i];
+          travel += Math.sqrt(pt_diff(prev_wheel, curr_wheel));
+          travel_vals.push(travel);
+          prev_wheel = curr_wheel;
+        }
+
+        var data = {
+            // A labels array that can contain any sort of values
+            labels: comp_data[0],
+            // Our series array that contains series objects or in this case series data arrays
+            series: [
+              travel_vals
+            ]
+        };
+
+        new Chartist.Line('.ct-chart', data);
+      }
+
+      function compress() {
+        constraints.spring.setCompression(constraints.spring.compression + 10);
+        solver.solve();
+        solver.drawConstraints();
+
+        constraints.spring.setCompression(0);
+        solver.solve();
+        solver.drawConstraints();
+        constraints.spring.setCompression(null);
       }
 
       function init() {
@@ -102,6 +157,17 @@
           bike.draw();
         }
       }
+
+      function toggleVisibility(id) {
+        var div = document.getElementById(id);
+        if (div.classList.contains('hidden')) {
+          div.classList.add('shown');
+          div.classList.remove('hidden');
+        } else {
+          div.classList.add('hidden');
+          div.classList.remove('shown');
+        }
+      }
     </script>
 
     <style>
@@ -120,7 +186,6 @@
 
       #canvasContainer {
         display: inline-block;
-        position: relative;
         width: 600px;
       }
 
@@ -128,15 +193,54 @@
         z-index: 1;
       }
 
-      #settings {
-        display: inline-block;
-        margin: 20px 20px;
-        width: 300px;
+      #debug {
+        width: 350px;
+        height: 300px;
       }
 
-      #settings label {
+      #leverageGraph {
+        width: 400px;
+        height: 400px;
+      }
+
+      #panel {
         display: inline-block;
-        width: 140px;
+        margin: 20px 20px;
+        width: 450px;
+      }
+
+      #panel label {
+        display: inline-block;
+        width: 160px;
+      }
+
+      #settings {
+        margin: 20px 20px;
+        width: 400px;
+      }
+
+      .animateShow {
+        -moz-transition: all 0.4s ease-in-out;
+        -o-transition: all 0.4s ease-in-out;
+        -webkit-transition: all 0.4s ease-in-out;
+        transition: all 0.4s ease-in-out;
+      }
+
+      .button {
+
+      }
+
+      .hidden {
+        /*display: none;*/
+        max-height: 0;
+        opacity: 0;
+        overflow-y: hidden;
+      }
+
+      .shown {
+        /*display: inline-block;*/
+        max-height: auto;
+        opacity: 1;
       }
     </style>
   </head>
@@ -145,17 +249,29 @@
       <canvas id="canvasBike" width="600" height="600"></canvas>
       <canvas id="canvasLinkage" width="600" height="600"></canvas>
     </div>
-    <div id="settings">
-      <select id="bikeSelector" onchange="selectBike();"></select>
-      <br />
+    <div id="panel">
+      <div>
+        <canvas id="canvasDebug" width="350px" height="300px"></canvas>
+      </div>
+      <div>
+        <select id="bikeSelector" onchange="selectBike();"></select>
+        <button class="button" onclick="toggleVisibility('settings')">Settings</button>
+        <button class="button" onclick="compress();">Compress</button>
+      </div>
+      <div id="settings" class="animateShow hidden">
+        <br />
 
-      <label for="txtScale">Scale:</label>
-      <input type="text" name="txtScale" id="txtScale" onchange="updateImageScale();" />
-      <br />
+        <label for="txtScale">Scale:</label>
+        <input type="text" name="txtScale" id="txtScale" onchange="updateImageScale();" />
+        <br />
 
-      <label for="txtBB">Image origin (BB):</label>
-      <input type="text" name="txtBB" id="txtBB" onchange="updateImageOrigin();" />
-      <br />
+        <label for="txtBB">Image origin (BB):</label>
+        <input type="text" name="txtBB" id="txtBB" onchange="updateImageOrigin();" />
+        <br />
+      </div>
+      <div id="charts">
+        <div id="leverageGraph" class="ct-chart ct-perfect-fourth" />
+      </div>
     </div>
   </body>
 </html>
